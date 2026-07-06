@@ -40,3 +40,11 @@ Modify your `/etc/inittab` to replace:
 `tty6::respawn:/sbin/getty 38400 tty6`  
 with:  
 `tty6::respawn:/usr/bin/vtlocker`
+
+## Roadmap
+
+- Rewrite to zig 0.16
+- Make ui as separate module with logic improvements
+- Screensavers (especially DVD)
+- Configuration through arguments
+- Post on r/unixporn
