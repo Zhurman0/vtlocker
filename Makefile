@@ -16,23 +16,23 @@ TARGET := $(BINDIR)/vtlocker
 all: $(TARGET)
 
 $(TARGET): $(OBJ)
-    @mkdir -p $(BINDIR)
-    $(CC) $(CFLAGS) $(OBJ) -o $(TARGET) $(LIBS)
-    strip $(TARGET)
+	@mkdir -p $(BINDIR)
+	$(CC) $(CFLAGS) $(OBJ) -o $(TARGET) $(LIBS)
+	strip $(TARGET)
 
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c
-    @mkdir -p $(BUILDDIR)
-    $(CC) $(CFLAGS) -c $< -o $@
+	@mkdir -p $(BUILDDIR)
+	$(CC) $(CFLAGS) -c $< -o $@
 
 install: $(TARGET)
-    @mkdir -p $(PREFIX)/bin
-    cp $(TARGET) $(INSTALL)
-    chmod 755 $(INSTALL)
+	@mkdir -p $(PREFIX)/bin
+	cp $(TARGET) $(INSTALL)
+	chmod 755 $(INSTALL)
 
 delete:
-    rm -f $(INSTALL)
+	rm -f $(INSTALL)
 
 clean:
-    rm -rf $(BUILDDIR) $(BINDIR)
+	rm -rf $(BUILDDIR) $(BINDIR)
 
 .PHONY: all clean install uninstall
