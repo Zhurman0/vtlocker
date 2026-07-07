@@ -60,6 +60,6 @@ pub fn init(n: u32) !void {
 
 pub fn deinit() void {
     if (tty_modified) vtctl.setAuto(tty) catch {};
-    if (tty > 0)   _ = linux.close(epoll);
-    if (epoll > 0) _ = linux.close(tty);
+    if (tty > 0)   _ = linux.close(tty);
+    if (epoll > 0) _ = linux.close(epoll);
 }
