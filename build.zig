@@ -6,10 +6,17 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
 
-    //const vt_mod = b.addModule("vt", .{
-    //    .root_source_file = b.path("src/vt.zig"),
-    //    .target = target, 
-    //});
+    const ui_mod = b.addModule("ui", .{
+        .root_source_file = b.path("src/ui/root.zig"),
+        .target = target, 
+    });
+
+    const locker_mod = b.addModule("locker", .{
+        .root_source_file = b.path("src/locker/root.zig"),
+        .target = target,
+    });
+    locker_mod.addImport("ui", ui_mod);
+    
 
     const exe = b.addExecutable(.{
         .name = "vtlocker",
@@ -17,9 +24,9 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/main.zig"),
             .target   = target,
             .optimize = optimize,
-            //.imports = &.{
-            //    .{ .name = "server", .module = server_mod },
-            //},
+            .imports = &.{
+                .{ .name = "locker", .module = locker_mod },
+            },
         }),
     });
 
@@ -47,10 +54,10 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_exe_tests.step);
 
+
     const clean_step = b.step("clean", "Remove build artifacts");
     
     clean_step.dependOn(&b.addSystemCommand(&.{
         "rm", "-rf", "zig-out", ".zig-cache",
-    }).step);
-    
+    }).step);    
 }

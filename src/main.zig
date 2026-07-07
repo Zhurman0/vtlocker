@@ -1,4 +1,5 @@
 const std = @import("std");
+const locker = @import("locker");
 
 
 fn parseArgs(argv: []const []const u8) !Args {
@@ -30,7 +31,6 @@ fn parseArgs(argv: []const []const u8) !Args {
                 result.mask = m[0];
 
                 skip = true;
-                result.help = false;
 
             } else {
                 std.log.warn("Unknown flag: {s}", .{arg});
@@ -42,8 +42,11 @@ fn parseArgs(argv: []const []const u8) !Args {
             if (result.tty != 0) {
                 std.log.warn("Unexpected extra positional argument: {s}", .{arg});
             } else {
-                result.tty  = try std.fmt.parseInt(u32, arg, 10);
-                result.help = false;
+                result.tty  = std.fmt.parseInt(u32, arg, 10) catch |err| switch (err) {
+                    error.InvalidCharacter => return error.IntegerExpected,
+
+                    else => return err,
+                };
             }
         }
     }
@@ -53,7 +56,7 @@ fn parseArgs(argv: []const []const u8) !Args {
 
 
 const Args = struct {
-    help: bool = true,
+    help: bool = false,
     tty:  u32  = 0,     // 0 -> no tty specified
     mask: u8   = 0,     // '\0' -> no mask
 };
@@ -61,7 +64,7 @@ const Args = struct {
 const helpmsg =
     \\Usage: vtlocker [TTY] [options]
     \\
-    \\TTY:  Virtual console number to activate (1..63)
+    \\TTY:  Virtual console number to activate (1..15)
     \\      If omitted, vtlocker works on the current console
     \\
     \\Options:
@@ -77,11 +80,12 @@ pub fn main(init: std.process.Init) !void {
 
     const stdout = @constCast(&std.Io.File.stdout().writer(io, &[_]u8{}).interface);
 
+
     const argv = try init.minimal.args.toSlice(arena);
     const args = blk: {
         break :blk parseArgs(argv) catch |err| {
             std.log.err("{s}", .{ @errorName(err) });
-            break :blk Args{};
+            break :blk Args{ .help = true };
         };
     };
 
@@ -89,6 +93,19 @@ pub fn main(init: std.process.Init) !void {
         try stdout.writeAll(helpmsg);
         return;
     }
+
+
+    locker.init(args.tty) catch |err| {
+        std.log.err("{s}", .{ @errorName(err) });
+        locker.deinit();
+        return;
+    };
+
+    try stdout.writeAll("State: LOCKED (wait 10 sec)\n");
+    try io.sleep(.fromSeconds(10), .real);
+    
+    locker.deinit();
+    try stdout.writeAll("State: UNLOCKED\n");
 }
 
 
