@@ -62,7 +62,7 @@ const helpmsg =
     \\Usage: vtlocker [TTY] [options]
     \\
     \\TTY:  Virtual console number to activate (1..63)
-    \\      If omitted, vtlocker works on the current console.
+    \\      If omitted, vtlocker works on the current console
     \\
     \\Options:
     \\  -m / --mask CHAR      Mask character for password input (Default: none)
