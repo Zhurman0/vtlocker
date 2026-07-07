@@ -35,39 +35,38 @@ pub fn initSignals() !void {
 pub fn getActiveVT(fd: linux.fd_t) !u16 {
     var st: vt.Stat = undefined;
     
-    const ret = linux.ioctl(fd, @intFromEnum(vt.Ioctl.GETSTATE), @intFromPtr(&st));
-    if (ret & (1 << (@bitSizeOf(usize) - 1)) != 0) return error.GetStateFailed;
+    if (vt.ioctl(fd, .GETSTATE, @intFromPtr(&st)) < 0) return error.GetStateFailed;
         
     return st.active;
 }
 
-pub fn setProcess(fd: linux.fd_t) !void {
-    var mode_c: vt.CMode = undefined;
-    
-    const ret = linux.ioctl(fd, vt.Ioctl.GETMODE, @intFromPtr(&mode_c));
-    if (ret & (1 << (@bitSizeOf(usize) - 1)) != 0) return error.GetModeFailed;
+pub fn setVT(n: u32, fd: linux.fd_t) !void {
+    var mode = vt.SetActivate{
+        .console = switch (n) {
+            0    => try getActiveVT(fd),
+            else => n,
+        },
+        .mode    = vt.Mode{
+            .kind   = .PROCESS,
+            .waitv  = 0,
+            .relsig = @intFromEnum(linux.SIG.USR1),
+            .acqsig = @intFromEnum(linux.SIG.USR2),
+        },
+    };
 
-    var mode = vt.Mode.fromC(mode_c);
-    mode.kind   = .PROCESS;
-    mode.waitv  = 0;
-    mode.relsig = linux.SIG.USR1;
-    mode.acqsig = linux.SIG.USR2;
-
-    _ = linux.ioctl(fd, @intFromEnum(vt.Ioctl.SETMODE), @intFromPtr(&mode.toC()));
+    if (vt.ioctl(fd, .SETACTIVATE, @intFromPtr(&mode)) < 0) return error.SetActivateFailed;
 }
 
 pub fn setAuto(fd: linux.fd_t) !void {
-    var mode_c: vt.CMode = undefined;
+    var mode: vt.Mode = undefined;
+    const ptr = @intFromPtr(&mode);
     
-    const ret = linux.ioctl(fd, @intFromEnum(vt.Ioctl.GETMODE), @intFromPtr(&mode_c));
-    if (ret & (1 << (@bitSizeOf(usize) - 1)) != 0) return error.GetStateFailed;
+    if (vt.ioctl(fd, .GETMODE, ptr) < 0) return error.GetStateFailed;
 
-    var mode = vt.Mode.fromC(mode_c);
     mode.kind = .AUTO;
-
-    _ = linux.ioctl(fd, @intFromEnum(vt.Ioctl.SETMODE), @intFromPtr(&mode.toC()));
+    _ = vt.ioctl(fd, .SETMODE, ptr);
 }
 
 pub fn denySwitch(fd: linux.fd_t) !void {
-    _ = linux.ioctl(fd, @intFromEnum(vt.Ioctl.RELDISP), 0);
+    _ = vt.ioctl(fd, .RELDISP, 0);
 }

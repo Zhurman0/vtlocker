@@ -1,5 +1,18 @@
 // Hand rewrite of <linux/vt.h> header to Zig
 
+comptime {
+    if (@import("builtin").os.tag != .linux) {
+        @compileError("Virtual Terminal setup available only on Linux");
+    }
+}
+
+
+const linux = @import("std").os.linux;
+
+pub inline fn ioctl(fd: linux.fd_t, kind: Kind, args: usize) isize {
+    return @bitCast(linux.ioctl(fd, @intFromEnum(kind), args));
+}
+
 pub inline fn isValidConsole(n: u32) bool {
     return n >= 1 and n <= 63;
 }
@@ -11,7 +24,7 @@ pub inline fn isValidConsole(n: u32) bool {
 //   - therefore MAX_NR_CONSOLES = 63 to avoid overlap with serial devices
 
 
-pub const Ioctl = enum(u32) {
+pub const Kind = enum(u32) {
     OPENQRY       = 0x5600,     // find available vt
     
     GETMODE       = 0x5601,     // get mode of active vt
@@ -41,42 +54,17 @@ pub const Ioctl = enum(u32) {
 };
 
 
-pub const CMode = extern struct { // C ABI
-    mode:   u8,  // Mode.kind enum value
-    waitv:  u8,
-    relsig: i16,
-    acqsig: i16,
-    frsig:  i16 = 0,  // unsused value, must be set to 0
-};
-
-pub const Mode = struct {
+pub const Mode = packed struct(u64) {
     kind: enum(u8) {
         AUTO    = 0x00,  // auto vt switching
         PROCESS = 0x01,  // process controls switching
         ACKACQ  = 0x02,  // acknowledge switch
-    },
-    waitv:  u8,   // if non-zero, writes to the VT block when the console is not actve
-    relsig: i16,  // signal to raise on release request from kernel
-    acqsig: i16,  // signal sent by kernel when VT is acquired
+    } = .AUTO,
 
-
-    pub fn toC(self: *Mode) CMode {
-        return .{
-            .mode   = @intFromEnum(self.kind),
-            .waitv  = self.waitv,
-            .relsig = self.relsig,
-            .acqsig = self.acqsig,
-        };
-    }
-
-    pub fn fromC(c: CMode) Mode {
-        return .{
-            .kind   = @enumFromInt(c.mode),
-            .waitv  = c.waitv,
-            .relsig = c.relsig,
-            .acqsig = c.acqsig,
-        };
-    }
+    waitv:  u8 = 0,   // if non-zero, writes to the VT block when the console is not actve
+    relsig: i16 = 0,  // signal to raise on release request from kernel
+    acqsig: i16 = 0,  // signal sent by kernel when VT is acquired
+    frsig:  i16 = 0,  // unsused value, must be set to 0
 };
 
 
@@ -104,48 +92,26 @@ pub const ConSize = extern struct {
 };
 
 
-
-pub const CEvent = extern struct { // C ABI
-    event: u32,  // Event.kind enum value
-    old:   u32,
-    new:   u32,
-    pad:   [4]u32 = .{ 0, 0, 0, 0 },  // padding for expansion
-};
-
-pub const Event = struct {
+pub const Event = packed struct(u224) {
     kind: enum(u32) {
         SWITCH  = 0x0001,
         BLANK   = 0x0002,
         UNBLANK = 0x0004,
         RESIZE  = 0x0008,
-    },
-    old: u32,  // old console
-    new: u32,  // new console
+    } = .SWITCH,
 
-    
+    old: u32 = 0,  // old console
+    new: u32 = 0,  // new console
+
+    pad: [4]u32 = .{ 0, 0, 0, 0 },  // padding for expansion 
+
     pub const MAXCOUNT = 0x000F;
-
-    pub fn toC(self: *Event) CEvent {
-        return .{
-            .event = @intFromEnum(self.kind),
-            .old   = self.old,
-            .new   = self.new,
-        };
-    }
-
-    pub fn fromC(c: CEvent) Event {
-        return .{
-            .kind = @enumFromInt(c.event),
-            .old  = c.old,
-            .new  = c.new,
-        };
-    }
 };
 
 
-pub const SetActivate = extern struct {
+pub const SetActivate = packed struct(u96) {
     console: u32,
-    mode: CMode,
+    mode: Mode,
 };
 
 pub const ConSizeCsrPos = extern struct {
@@ -154,10 +120,3 @@ pub const ConSizeCsrPos = extern struct {
     csr_row:  u16,  // current cursor row (0-based)
     csr_col:  u16,  // current cursor column (0-based)
 };
-
-
-comptime {
-    if (@import("builtin").os.tag != .linux) {
-        @compileError("Virtual Terminal setup available only on Linux");
-    }
-}

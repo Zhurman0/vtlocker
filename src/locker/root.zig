@@ -27,22 +27,7 @@ pub fn init(n: u32) !void {
     }, 0));
     if (tty < 0) return error.VTOpenFailed;
 
-
-    var req = vt.SetActivate{
-        .console = switch (n) {
-            0    => try vtctl.getActiveVT(tty),
-            else => n,
-        },
-        .mode    = @constCast(&vt.Mode{
-            .kind   = .PROCESS,
-            .waitv  = 0,
-            .relsig = @intFromEnum(linux.SIG.USR1),
-            .acqsig = @intFromEnum(linux.SIG.USR2),
-        }).toC(),
-    };
-    var ret = linux.ioctl(tty, @intFromEnum(vt.Ioctl.SETACTIVATE), @intFromPtr(&req));
-    if (ret & (1 << (@bitSizeOf(usize) - 1)) != 0) return error.SetActivateFailed;
-
+    try vtctl.setVT(n, tty);
     tty_modified = true;
 
     try vtctl.initSignals();
@@ -51,15 +36,20 @@ pub fn init(n: u32) !void {
     epoll = @intCast(linux.epoll_create1(linux.EPOLL.CLOEXEC));
     if (epoll < 0) return error.EpollCreateFailed;
     
-    ret = linux.epoll_ctl(epoll, linux.EPOLL.CTL_ADD, tty, @constCast(&linux.epoll_event{
-        .events = linux.EPOLL.IN,
-        .data = .{ .fd = tty },
-    }));
-    if (ret & (1 << (@bitSizeOf(usize) - 1)) != 0) return error.EpollAddFailed;
+    const ret: isize = @intCast(linux.epoll_ctl(
+        epoll,
+        linux.EPOLL.CTL_ADD,
+        tty,
+        @constCast(&linux.epoll_event{
+            .events = linux.EPOLL.IN,
+            .data = .{ .fd = tty },
+        }),
+    ));
+    if (ret < 0) return error.EpollAddFailed;
 }
 
 pub fn deinit() void {
     if (tty_modified) vtctl.setAuto(tty) catch {};
-    if (tty > 0)   _ = linux.close(tty);
-    if (epoll > 0) _ = linux.close(epoll);
+    if (tty > -1)   _ = linux.close(tty);
+    if (epoll > -1) _ = linux.close(epoll);
 }
