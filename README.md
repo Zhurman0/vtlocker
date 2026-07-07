@@ -43,7 +43,7 @@ with:
 
 ## Roadmap
 
-- Rewrite to zig 0.16
+- Rewrite to zig 0.16 (see [zig branch](../../tree/zig))
 - Make ui as separate module with logic improvements
 - Screensavers (especially DVD)
 - Configuration through arguments
