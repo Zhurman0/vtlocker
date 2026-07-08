@@ -2,7 +2,7 @@
 
 ---
 
-VTLocker is a minimal PAM‑based login program designed to replace getty on a
+VTLocker is a PAM‑based login program designed to replace getty on a
 dedicated /dev/ttyN.  
 It runs the terminal in VT_PROCESS mode, intercepts and
 controls VT switch signals, blocks unauthorized VT changes, and provides a
@@ -16,10 +16,7 @@ Suitable as a replacement for graphical lockscreen programs on dedicated VTs.
 ## Usage
 
 ```
-vtlocker [TTY] [options]
-
-TTY:  Virtual console number to activate (1..63)
-      If omitted, vtlocker works on the current console
+vtlocker [options]
 
 Options:
   -m / --mask CHAR      Mask character for password input (Default: none)
@@ -31,6 +28,7 @@ Options:
 ### Dependencies:
  - zig 0.16.x
  - libpam
+ - libc
 
 ### Build:
 
@@ -43,7 +41,8 @@ zig build install -Doptimize=ReleaseSmall
 
 - As a program:
 ```
-vtlocker 6
+sudo chvt 6
+vtlocker
 ```
 
 - Replace getty:  
@@ -52,4 +51,11 @@ Modify your `/etc/inittab` to replace:
 with:  
 `tty6::respawn:/usr/bin/vtlocker`
 
-// but underlying logic is not implemented yet
+## Roadmap
+
+- Split project into 2 binaries:
+  - `vtlock-switch`: uses setuid to change VT;
+  - `vtlocker`: actually a locker.
+- Make ui module/framework with smart redraw of characters
+- Add screensavers (especially a DVD)
+- Post on r/unixporn
