@@ -85,8 +85,9 @@ pub fn main(init: std.process.Init) !void {
         return;
     };
 
-    try stdout.writeAll("State: LOCKED (wait 10 sec)\n");
-    try io.sleep(.fromSeconds(10), .real);
+    try stdout.writeAll("State: LOCKED\n");
+
+    try locker.run(arena, stdout);
     
     locker.deinit();
     try stdout.writeAll("State: UNLOCKED\n");

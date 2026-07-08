@@ -45,8 +45,66 @@ pub fn init() !void {
 }
 
 
+pub fn run(arena: std.mem.Allocator, stdout: *std.Io.Writer) !void {
+    while (true) {
+        try stdout.writeAll("Login: ");
+        var user_buf: [64]u8 = undefined;
+        const user = try readLineEpoll(epoll, tty, user_buf[0..]);
+        if (user.len == 0) continue;
+
+        try stdout.writeAll("Password: ");
+        var pass_buf: [64]u8 = undefined;
+        const password = try readLineEpoll(epoll, tty, pass_buf[0..]);
+        if (password.len == 0) continue;
+
+
+        const result = try pam.auth(arena, user, password);
+
+        if (result.ok) {
+            try stdout.writeAll("auth ok\n",);
+            break;
+        } else {
+            try stdout.writeAll("auth failed\n");
+            if (result.last_msg) |msg| {
+                try stdout.print("pam: {s}\n", .{msg.text});
+            }
+        }
+    }
+}
+
+
+
 pub fn deinit() void {
     if (tty_modified) vtctl.setAuto(tty) catch {};
     if (tty > -1)   _ = linux.close(tty);
     if (epoll > -1) _ = linux.close(epoll);
+}
+
+
+fn readLineEpoll(epoll_fd: linux.fd_t, tty_fd: linux.fd_t, buf: []u8) ![]u8 {
+    var len: usize = 0;
+    var events: [4]linux.epoll_event = undefined;
+
+    while (true) {
+        const n: isize = @bitCast(linux.epoll_wait(epoll_fd, &events, events.len, -1));
+        if (n <= 0) continue;
+
+
+        var tmp: [16]u8 = undefined;
+        const r = try std.posix.read(tty_fd, &tmp);
+
+        for (tmp[0..r]) |b| {
+            switch (b) {
+                '\r', '\n' => return buf[0..len],
+                0x7f       => { if (len > 0) len -= 1; },
+
+                else => {
+                    if (len < buf.len) {
+                        buf[len] = b;
+                        len += 1;
+                    }
+                },
+            }
+        }
+    }
 }
