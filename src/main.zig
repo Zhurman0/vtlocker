@@ -2,8 +2,8 @@ const std = @import("std");
 const locker = @import("locker");
 
 
-fn parseArgs(argv: []const []const u8) !Args {
-    var result = Args{};
+fn parseArgs(argv: []const []const u8) !LockerArgs {
+    var result = LockerArgs{};
     var skip = false;
 
     for (1..argv.len) |i| {
@@ -36,18 +36,6 @@ fn parseArgs(argv: []const []const u8) !Args {
                 std.log.warn("Unknown flag: {s}", .{arg});
                 result.help = true;
             }
-
-        // positional argument: tty number
-        } else {
-            if (result.tty != 0) {
-                std.log.warn("Unexpected extra positional argument: {s}", .{arg});
-            } else {
-                result.tty  = std.fmt.parseInt(u32, arg, 10) catch |err| switch (err) {
-                    error.InvalidCharacter => return error.IntegerExpected,
-
-                    else => return err,
-                };
-            }
         }
     }
 
@@ -55,17 +43,13 @@ fn parseArgs(argv: []const []const u8) !Args {
 }
 
 
-const Args = struct {
+const LockerArgs = struct {
     help: bool = false,
-    tty:  u32  = 0,     // 0 -> no tty specified
     mask: u8   = 0,     // '\0' -> no mask
 };
 
 const helpmsg =
     \\Usage: vtlocker [TTY] [options]
-    \\
-    \\TTY:  Virtual console number to activate (1..15)
-    \\      If omitted, vtlocker works on the current console
     \\
     \\Options:
     \\  -m / --mask CHAR      Mask character for password input (Default: none)
@@ -85,7 +69,7 @@ pub fn main(init: std.process.Init) !void {
     const args = blk: {
         break :blk parseArgs(argv) catch |err| {
             std.log.err("{s}", .{ @errorName(err) });
-            break :blk Args{ .help = true };
+            break :blk LockerArgs{ .help = true };
         };
     };
 
@@ -95,7 +79,7 @@ pub fn main(init: std.process.Init) !void {
     }
 
 
-    locker.init(args.tty) catch |err| {
+    locker.init() catch |err| {
         std.log.err("{s}", .{ @errorName(err) });
         locker.deinit();
         return;
@@ -113,24 +97,15 @@ test "argsParseTest: empty args" {
     const args = try parseArgs(&.{ "bin" });
 
     try std.testing.expectEqual(false, args.help);
-    try std.testing.expectEqual(@as(u32, 0), args.tty);
-    try std.testing.expectEqual(@as(u8, 0), args.mask);
-}
-
-test "argsParseTest: tty positional" {
-    const args = try parseArgs(&.{ "bin", "6" });
-
-    try std.testing.expectEqual(@as(u32, 6), args.tty);
     try std.testing.expectEqual(@as(u8, 0), args.mask);
 }
 
 test "argsParseTest: mask short flag" {
     const args = try parseArgs(&.{
         "bin",
-        "-M", "*",
+        "-ь", "*",
     });
 
-    try std.testing.expectEqual(@as(u32, 0), args.tty);
     try std.testing.expectEqual(@as(u8, '*'), args.mask);
 }
 
@@ -140,19 +115,7 @@ test "argsParseTest: mask long flag" {
         "--mask", "#",
     });
 
-    try std.testing.expectEqual(@as(u32, 0), args.tty);
     try std.testing.expectEqual(@as(u8, '#'), args.mask);
-}
-
-test "argsParseTest: tty + mask" {
-    const args = try parseArgs(&.{
-        "bin",
-        "3",
-        "--mask", "@",
-    });
-
-    try std.testing.expectEqual(@as(u32, 3), args.tty);
-    try std.testing.expectEqual(@as(u8, '@'), args.mask);
 }
 
 test "argsParseTest: help flag" {
@@ -162,7 +125,6 @@ test "argsParseTest: help flag" {
     });
 
     try std.testing.expectEqual(true, args.help);
-    try std.testing.expectEqual(@as(u32, 0), args.tty);
     try std.testing.expectEqual(@as(u8, 0), args.mask);
 }
 

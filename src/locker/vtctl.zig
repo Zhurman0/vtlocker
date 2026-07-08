@@ -40,22 +40,17 @@ pub fn getActiveVT(fd: linux.fd_t) !u16 {
     return st.active;
 }
 
-pub fn setVT(n: u32, fd: linux.fd_t) !void {
-    var mode = vt.SetActivate{
-        .console = switch (n) {
-            0    => try getActiveVT(fd),
-            else => n,
-        },
-        .mode    = vt.Mode{
-            .kind   = .PROCESS,
-            .waitv  = 0,
-            .relsig = @intFromEnum(linux.SIG.USR1),
-            .acqsig = @intFromEnum(linux.SIG.USR2),
-        },
+pub fn setProcess(fd: linux.fd_t) !void {
+    var mode = vt.Mode{
+        .kind   = .PROCESS,
+        .waitv  = 0,
+        .relsig = @intFromEnum(linux.SIG.USR1),
+        .acqsig = @intFromEnum(linux.SIG.USR2),
     };
 
-    if (vt.ioctl(fd, .SETACTIVATE, @intFromPtr(&mode)) < 0) return error.SetActivateFailed;
+    if (vt.ioctl(fd, .SETMODE, @intFromPtr(&mode)) < 0) return error.SetModeFailed;
 }
+
 
 pub fn setAuto(fd: linux.fd_t) !void {
     var mode: vt.Mode = undefined;

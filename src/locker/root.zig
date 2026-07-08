@@ -12,31 +12,27 @@ var tty_modified: bool = false;
 var epoll: linux.fd_t  = -1;
 
 
-pub fn init(n: u32) !void {
-    var path_buf: [16]u8 = undefined;
-    const path = switch (n) {
-        0 => "/dev/tty",
-        1...15 => try std.fmt.bufPrintZ(&path_buf, "/dev/tty{d}", .{n}),
-        else => return error.UnsupportedTTY,
-    };
+pub fn init() !void {
+    var ret: isize = undefined;
 
-
-    tty = @intCast(linux.open(path, .{
+    
+    ret = @bitCast(linux.open("/dev/tty", .{
         .ACCMODE = .RDWR,
         .NONBLOCK = true,
     }, 0));
-    if (tty < 0) return error.VTOpenFailed;
-
-    try vtctl.setVT(n, tty);
-    tty_modified = true;
+    if (ret < 0) return error.VTOpenFailed;
+    tty = @intCast(ret);
 
     try vtctl.initSignals();
+    try vtctl.setProcess(tty);
+    tty_modified = true;
 
 
-    epoll = @intCast(linux.epoll_create1(linux.EPOLL.CLOEXEC));
-    if (epoll < 0) return error.EpollCreateFailed;
+    ret = @bitCast(linux.epoll_create1(linux.EPOLL.CLOEXEC));
+    if (ret < 0) return error.EpollCreateFailed;
+    epoll = @intCast(ret);
     
-    const ret: isize = @intCast(linux.epoll_ctl(
+    ret = @bitCast(linux.epoll_ctl(
         epoll,
         linux.EPOLL.CTL_ADD,
         tty,
@@ -47,6 +43,7 @@ pub fn init(n: u32) !void {
     ));
     if (ret < 0) return error.EpollAddFailed;
 }
+
 
 pub fn deinit() void {
     if (tty_modified) vtctl.setAuto(tty) catch {};

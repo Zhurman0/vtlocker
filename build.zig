@@ -16,6 +16,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
     locker_mod.addImport("ui", ui_mod);
+    //locker_mod.linkSystemLibrary("pam", .{});
     
 
     const exe = b.addExecutable(.{
