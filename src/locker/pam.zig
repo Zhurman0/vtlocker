@@ -106,6 +106,11 @@ fn convfn(
                 const raw = c.calloc(pw.len + 1, @sizeOf(u8)) orelse return c.PAM_CONV_ERR;
                 const buf: [*:0]u8 = @ptrCast(raw);
 
+                // Note: PAM always freed memory for response that allocated here,
+                // so we need to use C malloc/calloc functions.
+                // You can see files libpam/pam_item.c:394 and libpam/include/pam_inline.h:398
+                // in https://github.com/linux-pam/linux-pam repo for more info.
+
                 @memcpy(buf[0..pw.len], pw);
                 buf[pw.len] = 0;
 
