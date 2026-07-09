@@ -53,9 +53,6 @@ with:
 
 ## Roadmap
 
-- Split project into 2 binaries:
-  - `vtlock-switch`: uses setuid to change VT;
-  - `vtlocker`: actually a locker.
 - Make ui module/framework with smart redraw of characters
 - Add screensavers (especially a DVD)
 - Post on r/unixporn
