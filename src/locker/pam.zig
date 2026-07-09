@@ -1,24 +1,6 @@
 const std = @import("std");
 
 
-pub const MsgStyle = enum(c_int) {
-    PROMPT_ECHO_OFF = 1,
-    PROMPT_ECHO_ON  = 2,
-    ERROR_MSG       = 3,
-    TEXT_INFO       = 4,
-};
-
-pub const Message = struct {
-    style: MsgStyle,
-    text:  []const u8,
-};
-
-pub const Result = struct {
-    ok: bool,
-    last_msg: ?Message,
-};
-
-
 const c = struct {
     pub const pam_handle_t = opaque {};
 
@@ -60,8 +42,21 @@ const c = struct {
 };
 
 
-const ConvContext = struct {
-    password: []const u8,
+pub const MsgStyle = enum(c_int) {
+    PROMPT_ECHO_OFF = 1,
+    PROMPT_ECHO_ON  = 2,
+    ERROR           = 3,
+    INFO            = 4,
+};
+
+pub const Message = struct {
+    style: MsgStyle,
+    text:  []const u8,
+};
+
+pub const ConvContext = struct {
+    user: ?[*:0]const u8,
+    pass: ?*[64]u8,
     last_msg: ?Message = null,
 };
 
@@ -79,29 +74,24 @@ fn convfn(
 
 
     const reply_ptr = c.calloc(n, @sizeOf(c.pam_response)) orelse return c.PAM_CONV_ERR;
-    const reply_base: [*]c.pam_response = @ptrCast(@alignCast(reply_ptr));
-    const reply_slice = reply_base[0..n];
+    const reply: [*]c.pam_response = @ptrCast(@alignCast(reply_ptr));
 
-    for (reply_slice) |*r| {
+    for (reply[0..n]) |*r| {
         r.resp = null;
         r.resp_retcode = 0;
     }
 
 
-    resp[0] = @ptrCast(reply_slice.ptr);
+    resp[0] = @ptrCast(reply);
 
-    const msg_slice = msg[0..n];
-
-    for (msg_slice, reply_slice) |maybe_ptr, *r| {
-        const m_ptr = maybe_ptr orelse return c.PAM_CONV_ERR;
-        const m = m_ptr.*;
+    for (msg[0..n], reply[0..n]) |maybe_ptr, *r| {
+        const m = (maybe_ptr orelse return c.PAM_CONV_ERR).*;
 
         const style: MsgStyle = @enumFromInt(m.msg_style);
 
         switch (style) {
             .PROMPT_ECHO_OFF, .PROMPT_ECHO_ON => {
-                const pw = ctx.password;
-
+                const pw  = ctx.pass orelse return c.PAM_CONV_ERR;
 
                 const raw = c.calloc(pw.len + 1, @sizeOf(u8)) orelse return c.PAM_CONV_ERR;
                 const buf: [*:0]u8 = @ptrCast(raw);
@@ -118,7 +108,7 @@ fn convfn(
                 r.resp_retcode = 0;
             },
 
-            .ERROR_MSG, .TEXT_INFO => {
+            .ERROR, .INFO => {
                 const text = if (m.msg) |p| std.mem.sliceTo(p, 0) else "";
                 ctx.last_msg = .{ .style = style, .text = text };
                 r.resp = null;
@@ -131,53 +121,33 @@ fn convfn(
 }
 
 
-pub fn auth(
-    allocator: std.mem.Allocator,
-    user: []const u8,
-    password: []const u8,
-) !Result {
+pub fn auth(ctx: *ConvContext) !bool {
     var pamh: ?*c.pam_handle_t = null;
-
-    var service_buf: [6:0]u8 = .{ 'l','o','g','i','n',0 };
-    const service_name: [*:0]const u8 = &service_buf;
-
-    var user_buf: [64]u8 = undefined;
-    if (user.len >= user_buf.len) return error.UserTooLong;
-    @memcpy(user_buf[0..user.len], user);
-    user_buf[user.len] = 0;
-    const user_z: [*:0]const u8 = @ptrCast(&user_buf);
-
-    const ctx_storage = try allocator.create(ConvContext);
-    ctx_storage.* = ConvContext{
-        .password = password,
-    };
 
     var conv = c.pam_conv{
         .conv = @constCast(&convfn),
-        .appdata_ptr = ctx_storage,
+        .appdata_ptr = ctx,
     };
 
-    const rc_start = c.pam_start(service_name, user_z, &conv, &pamh);
+
+    const rc_start = c.pam_start("login", ctx.user, &conv, &pamh);
     if (rc_start != c.PAM_SUCCESS or pamh == null) {
-        allocator.destroy(ctx_storage);
         return error.StartFailed;
     }
+
 
     const rc_auth = c.pam_authenticate(pamh, 0);
     if (rc_auth != c.PAM_SUCCESS) {
         _ = c.pam_end(pamh, rc_auth);
-        const last = ctx_storage.last_msg;
-        allocator.destroy(ctx_storage);
-        return .{ .ok = false, .last_msg = last };
+        return false;
     }
+
 
     const rc_acct = c.pam_acct_mgmt(pamh, 0);
     const rc_end  = c.pam_end(pamh, rc_acct);
 
-    const last = ctx_storage.last_msg;
-    allocator.destroy(ctx_storage);
-
     if (rc_end != c.PAM_SUCCESS) return error.EndFailed;
 
-    return .{ .ok = (rc_acct == c.PAM_SUCCESS), .last_msg = last };
+
+    return (rc_acct == c.PAM_SUCCESS);
 }

@@ -87,7 +87,7 @@ pub fn main(init: std.process.Init) !void {
 
     try stdout.writeAll("State: LOCKED\n");
 
-    try locker.run(arena, stdout);
+    try locker.run(stdout);
     
     locker.deinit();
     try stdout.writeAll("State: UNLOCKED\n");

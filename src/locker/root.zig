@@ -45,28 +45,38 @@ pub fn init() !void {
 }
 
 
-pub fn run(arena: std.mem.Allocator, stdout: *std.Io.Writer) !void {
+pub fn run(stdout: *std.Io.Writer) !void {
     while (true) {
+        var ctx = pam.ConvContext { .user = null, .pass = null };
+
         try stdout.writeAll("Login: ");
-        var user_buf: [64]u8 = undefined;
+        var user_buf: [64]u8 = [_]u8{ 0 } ** 64;
         const user = try readLineEpoll(epoll, tty, user_buf[0..]);
         if (user.len == 0) continue;
 
         try stdout.writeAll("Password: ");
-        var pass_buf: [64]u8 = undefined;
+        var pass_buf: [64]u8 = [_]u8{ 0 } ** 64;
         const password = try readLineEpoll(epoll, tty, pass_buf[0..]);
         if (password.len == 0) continue;
 
 
-        const result = try pam.auth(arena, user, password);
+        ctx = .{
+            .user = @as([*:0]u8, @ptrCast(&user_buf)),
+            .pass = &pass_buf,
+        };
 
-        if (result.ok) {
+        const ok = pam.auth(&ctx) catch |err| {
+            std.log.err("{s}", .{ @errorName(err) });
+            continue;
+        };
+
+        if (ok) {
             try stdout.writeAll("auth ok\n",);
             break;
         } else {
             try stdout.writeAll("auth failed\n");
-            if (result.last_msg) |msg| {
-                try stdout.print("pam: {s}\n", .{msg.text});
+            if (ctx.last_msg) |msg| {
+                try stdout.print("pam {s}: {s}\n", .{ @tagName(msg.style), msg.text });
             }
         }
     }
